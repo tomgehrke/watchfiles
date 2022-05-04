@@ -32,12 +32,19 @@ ShowHelp() {
     echo "  -H, --suppressHeading  Do not show the listing heading block"
     echo "  -O, --showOptions      Show the command line options used as criteria for this"
     echo "                         listing as part of the listing heading block"
+    echo "  -P, --plainText        Output contains no color or decoration escape codes."
 }
 
 # Flushed gathered lines to the output variable
 flushOutput () {
-    printf -v dirLine '%sDIRECTORY - %s%s\n' ${UNDERLINE} "$currentDir" ${COLOR_RESET}
-    printf -v fileLines '%s\n' "$currentFiles"
+    if [[ $optPlainText == "true" ]]
+    then
+        dirLine="DIRECTORY - $currentDir\n"
+        for i in {1..80}; do dirLine+="-"; done; dirLine+="\n"
+    else
+        dirLine="${UNDERLINE}DIRECTORY - $currentDir${COLOR_RESET}\n"
+    fi
+    fileLines="$currentFiles\n"
     output+="$dirLine"
     output+="$fileLines"
 }
@@ -57,10 +64,11 @@ optMaxAgeIgnore=$currentTimeSSE
 optSuppressHeading=""
 optShowOptions=""
 optReportOnly=""
+optPlainText=""
 
 # Read arguments and update options
-SHORT=h,t:,p:,a:,A:,x:,X:,0,H,O
-LONG=help,target:,fileRegex:,minAgeAlert:,minAgeIgnore:,maxAgeAlert:,maxAgeIgnore:,zeroByteAlert,suppressHeading,showOptions
+SHORT=h,t:,p:,a:,A:,x:,X:,0,H,O,P
+LONG=help,target:,fileRegex:,minAgeAlert:,minAgeIgnore:,maxAgeAlert:,maxAgeIgnore:,zeroByteAlert,suppressHeading,showOptions,plainText
 OPTS=$(getopt -n watchfiles --options $SHORT --longoptions $LONG -- "$@")
 
 eval set -- "$OPTS"
@@ -118,6 +126,11 @@ do
             shift
             ;;
 
+        --plainText | P )
+            optPlainText="true"
+            shift
+            ;;
+
         -- )
             shift;
             break
@@ -128,9 +141,23 @@ done
 
 heading=""
 
+# Set values based on color output status
+if [[ $optPlainText == "true" ]]
+then
+    zeroByteFlag="0"
+    minAgeFlag="A"
+    maxAgeFlag="X"
+    emptyFlag=" "
+else
+    zeroByteFlag="${BLUE}0${COLOR_RESET}"
+    minAgeFlag="${RED}A${COLOR_RESET}"
+    maxAgeFlag="${RED}X${COLOR_RESET}"
+    emptyFlag=" "
+fi
+
 if [[ $optSuppressHeading != "true" ]]
 then
-    heading+="#################################################################\n"
+    for i in {1..80}; do heading+="#"; done; heading+="\n"
     heading+="FILE LISTING FOR $optRootPath\n"
     heading+="$(date)\n"
     if [[ $optShowOptions == "true" ]]
@@ -144,27 +171,27 @@ then
 
         if [[ $optZeroByteAlert == "true" ]]
         then
-            options+="- Flag empty ('zero byte') files (flag = ${BLUE}0${COLOR_RESET})\n"
+            options+="- Flag empty ('zero byte') files (flag = $zeroByteFlag)\n"
         fi
 
         if [[ $optMinAgeAlert != 0 ]]
         then
-            options+="- Flag files that are at least $(( $optMinAgeAlert / 60 )) minutes old (flag = ${RED}A${COLOR_RESET})\n"
+            options+="- Flag files that are at least $(( $optMinAgeAlert / 60 )) minutes old (flag = $minAgeFlag)\n"
         fi
 
         if [[ $optMaxAgeAlert != $currentTimeSSE ]]
         then
-            options+="- Flag files that are older than $(( $optMaxAgeAlert / 60 )) minutes old (flag = ${RED}X${COLOR_RESET})\n"
+            options+="- Flag files that are older than $(( $optMaxAgeAlert / 60 )) minutes old (flag = $maxAgeFlag)\n"
         fi
 
         if [[ $optMinAgeIgnore != 0 ]]
         then
-            options+="- Do no list files that are not at least $(( $optMinAgeIgnore / 60 )) minutes old\n"
+            options+="- Do not list files that are not at least $(( $optMinAgeIgnore / 60 )) minutes old\n"
         fi
 
         if [[ $optMaxAgeIgnore != $currentTimeSSE ]]
         then
-            options+="- Do no list files that are older than $(( $optMaxAgeIgnore / 60 )) minutes old\n"
+            options+="- Do not list files that are older than $(( $optMaxAgeIgnore / 60 )) minutes old\n"
         fi
 
         if [[ $optSuppressHeading == "true" ]]
@@ -174,15 +201,13 @@ then
 
         if [[ $options != "" ]]
         then
-            heading+="================================================================\n"
+            for i in {1..40}; do heading+="="; done; heading+="\n"
             heading+="OPTIONS:\n\n"
             heading+="$options"
         fi
     fi
-    heading+="#################################################################\n\n"
+    for i in {1..80}; do heading+="#"; done; heading+="\n\n"
 fi
-
-printf -v majDiv "=========\n"
 
 output="$heading"
 
@@ -225,15 +250,17 @@ do
                 if [[ $fileAge -gt $optMinAgeIgnore && $fileAge -lt $optMaxAgeIgnore ]]
                 then
                     
+                    flagStack=""
+                    
                     # Has the user asked for a minimum age alert?
                     if [ $optMinAgeAlert -gt 0 ]
                     then
                         # Is the file's age greater than the minimum threshold?
                         if [ $fileAge -gt $optMinAgeAlert ]
                         then
-                            minAgeFlag="${RED}A${COLOR_RESET}"
+                            flagStack+=$minAgeFlag
                         else
-                            minAgeFlag=" "
+                            flagStack+=$emptyFlag
                         fi
                     fi
 
@@ -243,9 +270,9 @@ do
                         # Is the file's age greater than the maximum threshold?
                         if [ $fileAge -gt $optMaxAgeAlert ]
                         then
-                            maxAgeFlag="${RED}X${COLOR_RESET}"
+                            flagStack+=$maxAgeFlag
                         else
-                            maxAgeFlag=" "
+                            flagStack+=$emptyFlag
                         fi
                     fi
 
@@ -256,14 +283,18 @@ do
                         fileSize=$(echo `stat --format=%s "$fullPath"`)
                         if [ $fileSize == 0 ]
                         then
-                            zeroByteFlag="${BLUE}0${COLOR_RESET}"
+                            flagStack+=$zeroByteFlag
                         else
-                            zeroByteFlag=" "
+                            flagStack+=$emptyFlag
                         fi
                     fi
 
-                    printf -v fileLine '[%s%s%s] %s\n' "$minAgeFlag" "$maxAgeFlag" "$zeroByteFlag" "$line"
-                    currentFiles+="$fileLine"
+                    # printf -v fileLine '[%s] %s\n' "$flagStack" "$line"
+                    if [[ "$flagStack" != "" ]]
+                    then
+                        currentFiles+="[$flagStack] "
+                    fi
+                    currentFiles+="$line\n"
                 fi
             fi
         fi
