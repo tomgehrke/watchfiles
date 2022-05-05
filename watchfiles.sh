@@ -20,19 +20,26 @@ ShowHelp() {
     echo
     echo "Mandatory arguments to long options are mandatory for short options too."
     echo
-    echo "  -t, --target           Path to target directory if other than current."
-    echo "                         NOTE: If your target path has wildcards or spaces, you"
-    echo "                         will want to enclose the path in quotation marks."
-    echo "  -p, --fileRegex        The regex pattern for including a file in the listing."
-    echo "  -a, --minAgeAlert      Flag files that are at least this old (in minutes)."
-    echo "  -A, --minAgeIgnore     Exclude from the listing files that are newer (in minutes)."
-    echo "  -x, --maxAgeAlert      Flag files that are older than this (in minutes)."
-    echo "  -X, --maxAgeIgnore     Exclude from the listing files that are older (in minutes)."
-    echo "  -0, --zeroByteAlert    Flag files that are 0 bytes."
-    echo "  -H, --suppressHeading  Do not show the listing heading block"
-    echo "  -O, --showOptions      Show the command line options used as criteria for this"
-    echo "                         listing as part of the listing heading block"
-    echo "  -P, --plainText        Output contains no color or decoration escape codes."
+    echo "  -t, --target             Path to target directory if other than current."
+    echo "                           NOTE: If your target path has wildcards or spaces, you"
+    echo "                           will want to enclose the path in quotation marks."
+    echo "  -p, --fileRegex          The regex pattern for including a file in the listing."
+    echo "  -a, --minAgeAlert        Flag files that are at least this old (in minutes)."
+    echo "  -A, --minAgeIgnore       Exclude from the listing files that are newer (in minutes)."
+    echo "  -x, --maxAgeAlert        Flag files that are older than this (in minutes)."
+    echo "  -X, --maxAgeIgnore       Exclude from the listing files that are older (in minutes)."
+    echo "  -0, --zeroByteAlert      Flag files that are 0 bytes."
+    echo "  -H, --suppressHeading    Do not show the listing heading block"
+    echo "  -O, --showOptions        Show the command line options used as criteria for this"
+    echo "                           listing as part of the listing heading block"
+    echo "  -P, --plainText          Output contains no color or decoration escape codes."
+    echo "  -s, --mailSubject        The subject line for emailed output."
+    echo "                           ('Watchfiles Report' is the default.)"
+    echo "  -f, --mailFrom           The address an emailed report should be sent from."
+    echo "  -d, --mailDistribution   The distribution list of comma separated addresses the" 
+    echo "                           email should be sent to."
+    echo "  -e, --mailSuppressEmpty  An email will not be sent if the set criteria did not"
+    echo "                           result in any files being listed."
 }
 
 # Flushed gathered lines to the output variable
@@ -52,6 +59,7 @@ flushOutput () {
 currentDir=""
 currentFiles=""
 currentTimeSSE=$(echo `date +%s`) # Seconds Since Epoch
+filesFound=""
 
 # Set option defaults
 optRootPath="$PWD"
@@ -65,10 +73,14 @@ optSuppressHeading=""
 optShowOptions=""
 optReportOnly=""
 optPlainText=""
+optMailSubject="Watchfiles Report"
+optMailFrom=""
+optMailDistribution=""
+optMailSuppressEmpty=""
 
 # Read arguments and update options
-SHORT=h,t:,p:,a:,A:,x:,X:,0,H,O,P
-LONG=help,target:,fileRegex:,minAgeAlert:,minAgeIgnore:,maxAgeAlert:,maxAgeIgnore:,zeroByteAlert,suppressHeading,showOptions,plainText
+SHORT=h,t:,p:,a:,A:,x:,X:,0,H,O,P,s:,f:,d:,e
+LONG=help,target:,fileRegex:,minAgeAlert:,minAgeIgnore:,maxAgeAlert:,maxAgeIgnore:,zeroByteAlert,suppressHeading,showOptions,plainText,mailSubject:,mailFrom:,mailDistribution:,mailSuppressEmpty
 OPTS=$(getopt -n watchfiles --options $SHORT --longoptions $LONG -- "$@")
 
 eval set -- "$OPTS"
@@ -129,6 +141,30 @@ do
         --plainText | P )
             optPlainText="true"
             shift
+            ;;
+
+        --mailSubject | s )
+            optMailSubject="$2"
+            shift 2
+            ;;
+        
+        --mailFrom | f )
+            optMailFrom="$2"
+            shift 2
+            ;;
+        
+        --mailDistribution | d )
+            optMailDistribution="$2"
+
+            # Force plain text output
+            optPlainText="true"
+
+            shift 2
+            ;;
+
+        --mailSuppressEmpty | e )
+            optMailSuppressEmpty="true"
+            shift;
             ;;
 
         -- )
@@ -242,7 +278,7 @@ do
             [[ "$line" =~ $filePattern ]]
             fileName="${BASH_REMATCH[1]}"
 
-            if [[ "$fileName" =~ "$optFileRegex" ]]
+            if [[ "$fileName" =~ $optFileRegex ]]
             then
                 fullPath="${currentDir}"/"${fileName}"
                 fileAge=$(( $currentTimeSSE - `stat --format=%Y "$fullPath"` ))
@@ -295,6 +331,7 @@ do
                         currentFiles+="[$flagStack] "
                     fi
                     currentFiles+="$line\n"
+                    filesFound="true"
                 fi
             fi
         fi
@@ -308,4 +345,12 @@ then
     flushOutput
 fi
 
-echo -e "$output"
+if [[ "$optMailDistribution" != "" ]]
+then
+    if [[ $filesFound == "true" || $optMailSuppressEmpty != "true" ]]
+    then
+        echo -e "$output" | mailx -s "$optMailSubject" -r "$optMailFrom" "$optMailDistribution"
+    fi
+else
+    echo -e "$output"
+fi
