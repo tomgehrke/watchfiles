@@ -2,17 +2,26 @@
 
 # watchfiles.sh
 #
-# A fancier "ls" with options to flag files based on certain criteria.
+# A fancier "ls" with options to flag files based on certain criteria 
+# and send listings via email.
 
 shopt -s lastpipe
+shopt -s globstar
 
-COLOR_RESET='\e[0m'
-BOLD='\e[1m'
-UNDERLINE='\e[4m'
-RED='\e[31m'
-BLACK='\e[30m'     
-BLUE='\e[34m'
-WHITE='\e[37m'
+STYLE_RESET='\e[0m'
+FORMAT_BOLD='\e[1m'
+FORMAT_UNDERLINE='\e[4m'
+COLOR_FG_BLACK='\e[30m'     
+COLOR_FG_RED='\e[31m'
+COLOR_FG_YELLOW='\e[33m'
+COLOR_FG_BLUE='\e[34m'
+COLOR_FG_GREY='\e[37m'
+COLOR_FG_WHITE='\e[97m'
+COLOR_BG_BLACK='\e[40m'     
+COLOR_BG_RED='\e[41m'
+COLOR_BG_BLUE='\e[44m'
+COLOR_BG_GREY='\e[47m'
+COLOR_BG_DGREY='\e[100m'
 
 ShowHelp() {
     echo "Usage: ./watchfiles.sh [OPTION] ..."
@@ -49,7 +58,7 @@ flushOutput () {
         dirLine="DIRECTORY - $currentDir\n"
         for i in {1..80}; do dirLine+="-"; done; dirLine+="\n"
     else
-        dirLine="${UNDERLINE}DIRECTORY - $currentDir${COLOR_RESET}\n"
+        dirLine="${FORMAT_UNDERLINE}DIRECTORY - $currentDir${STYLE_RESET}\n"
     fi
     fileLines="$currentFiles\n"
     output+="$dirLine"
@@ -185,15 +194,15 @@ then
     maxAgeFlag="X"
     emptyFlag=" "
 else
-    zeroByteFlag="${BLUE}0${COLOR_RESET}"
-    minAgeFlag="${RED}A${COLOR_RESET}"
-    maxAgeFlag="${RED}X${COLOR_RESET}"
+    zeroByteFlag="${COLOR_BG_BLUE}${COLOR_FG_WHITE}${STYLE_BOLD}0${STYLE_RESET}"
+    minAgeFlag="${COLOR_BG_RED}${COLOR_FG_WHITE}${STYLE_BOLD}A${STYLE_RESET}"
+    maxAgeFlag="${COLOR_BG_RED}${COLOR_FG_YELLOW}${STYLE_BOLD}X${STYLE_RESET}"
     emptyFlag=" "
 fi
 
 if [[ $optSuppressHeading != "true" ]]
 then
-    for i in {1..80}; do heading+="#"; done; heading+="\n"
+    for i in {1..80}; do heading+="~"; done; heading+="\n"
     heading+="FILE LISTING FOR $optRootPath\n"
     heading+="$(date)\n"
     if [[ $optShowOptions == "true" ]]
@@ -207,17 +216,17 @@ then
 
         if [[ $optZeroByteAlert == "true" ]]
         then
-            options+="- Flag empty ('zero byte') files (flag = $zeroByteFlag)\n"
+            options+="- Flag empty ('zero byte') files (flag: $zeroByteFlag)\n"
         fi
 
         if [[ $optMinAgeAlert != 0 ]]
         then
-            options+="- Flag files that are at least $(( $optMinAgeAlert / 60 )) minutes old (flag = $minAgeFlag)\n"
+            options+="- Flag files that are at least $(( $optMinAgeAlert / 60 )) minutes old (flag: $minAgeFlag)\n"
         fi
 
         if [[ $optMaxAgeAlert != $currentTimeSSE ]]
         then
-            options+="- Flag files that are older than $(( $optMaxAgeAlert / 60 )) minutes old (flag = $maxAgeFlag)\n"
+            options+="- Flag files that are older than $(( $optMaxAgeAlert / 60 )) minutes old (flag: $maxAgeFlag)\n"
         fi
 
         if [[ $optMinAgeIgnore != 0 ]]
@@ -237,18 +246,17 @@ then
 
         if [[ $options != "" ]]
         then
-            for i in {1..40}; do heading+="="; done; heading+="\n"
-            heading+="OPTIONS:\n\n"
+            heading+="\nOPTIONS:\n"
             heading+="$options"
         fi
     fi
-    for i in {1..80}; do heading+="#"; done; heading+="\n\n"
+    for i in {1..80}; do heading+="~"; done; heading+="\n\n"
 fi
 
 output="$heading"
 
 # Executes "ls" and redirects output to the loop
-ls -hRltQ --full-time --time-style=long-iso --width=250 $optRootPath |
+ls -hRltQ --time-style=long-iso --width=250 $optRootPath |
 while IFS= read -r line
 do
     # See if the last character in the line is a ":" because that means we've entered a new directory
