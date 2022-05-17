@@ -5,6 +5,8 @@
 # A fancier "ls" with options to flag files based on certain criteria 
 # and send listings via email.
 
+SCRIPT_VERSION="22020517"
+
 shopt -s lastpipe
 shopt -s globstar
 
@@ -33,10 +35,14 @@ ShowHelp() {
     echo "                           NOTE: If your target path has wildcards or spaces, you"
     echo "                           will want to enclose the path in quotation marks."
     echo "  -p, --fileRegex          The regex pattern for including a file in the listing."
-    echo "  -a, --minAgeAlert        Flag files that are at least this old (in minutes)."
-    echo "  -A, --minAgeIgnore       Exclude from the listing files that are newer (in minutes)."
-    echo "  -x, --maxAgeAlert        Flag files that are older than this (in minutes)."
-    echo "  -X, --maxAgeIgnore       Exclude from the listing files that are older (in minutes)."
+    echo "  -n, --minAgeAlert        Flag files that are at least this old (in minutes)."
+    echo "  -N, --minAgeIgnore       Exclude from the listing files that are newer (in minutes)."
+    echo "  -a, --maxAgeAlert        Flag files that are older than this (in minutes)."
+    echo "  -A, --maxAgeIgnore       Exclude from the listing files that are older (in minutes)."
+    echo "  -b, --minSizeAlert       Flag files that are smaller than this size (in kilobytes)."
+    echo "  -B, --minSizeIgnore      Exclude from the listing files that are smaller (in kilobytes)."
+    echo "  -k, --maxSizeAlert       Flag files that are larger than this size (in kilobytes)."
+    echo "  -K, --maxSizeIgnore      Exclude from the listing files that are larger (in kilobytes)."
     echo "  -0, --zeroByteAlert      Flag files that are 0 bytes."
     echo "  -H, --suppressHeading    Do not show the listing heading block"
     echo "  -O, --showOptions        Show the command line options used as criteria for this"
@@ -49,6 +55,13 @@ ShowHelp() {
     echo "                           email should be sent to."
     echo "  -e, --mailSuppressEmpty  An email will not be sent if the set criteria did not"
     echo "                           result in any files being listed."
+    echo "  -S, --mailEmptySubject   The subject line of the email if no files are listed."
+    echo "  -v, --version            Show script version"
+}
+
+ShowVersion() {
+    echo "watchfiles.sh v$SCRIPT_VERSION"
+    echo "by Tom Gehrke"
 }
 
 # Flushed gathered lines to the output variable
@@ -78,6 +91,10 @@ optMinAgeAlert=0
 optMinAgeIgnore=0
 optMaxAgeAlert=$currentTimeSSE
 optMaxAgeIgnore=$currentTimeSSE
+optMinSizeAlert=0
+optMinSizeIgnore=0
+optMaxSizeAlert=0
+optMaxSizeIgnore=0
 optSuppressHeading=""
 optShowOptions=""
 optReportOnly=""
@@ -86,10 +103,11 @@ optMailSubject="Watchfiles Report"
 optMailFrom=""
 optMailDistribution=""
 optMailSuppressEmpty=""
+optMailEmptySubject=""
 
 # Read arguments and update options
-SHORT=h,t:,p:,a:,A:,x:,X:,0,H,O,P,s:,f:,d:,e
-LONG=help,target:,fileRegex:,minAgeAlert:,minAgeIgnore:,maxAgeAlert:,maxAgeIgnore:,zeroByteAlert,suppressHeading,showOptions,plainText,mailSubject:,mailFrom:,mailDistribution:,mailSuppressEmpty
+SHORT=h,t:,p:,n:,N:,a:,A:,0,H,O,P,s:,f:,d:,e,S:,b:,B:,k:,K:,v
+LONG=help,target:,fileRegex:,minAgeAlert:,minAgeIgnore:,maxAgeAlert:,maxAgeIgnore:,zeroByteAlert,suppressHeading,showOptions,plainText,mailSubject:,mailFrom:,mailDistribution:,mailSuppressEmpty,mailEmptySubject:,minSizeAlert:,minSizeIgnore:,maxSizeAlert:,maxSizeIgnore:,version
 OPTS=$(getopt -n watchfiles --options $SHORT --longoptions $LONG -- "$@")
 
 eval set -- "$OPTS"
@@ -99,6 +117,11 @@ do
     case "$1" in
         --help | -h )
             ShowHelp
+            exit
+            ;;
+
+        --version | -v )
+            ShowVersion
             exit
             ;;
 
@@ -112,23 +135,43 @@ do
             shift
             ;;
 
-        --minAgeAlert | -a )
+        --minAgeAlert | -n )
             optMinAgeAlert=$(( $2 * 60 ))
             shift 2
             ;;
 
-        --minAgeIgnore | -A )
+        --minAgeIgnore | -N )
             optMinAgeIgnore=$(( $2 * 60 ))
             shift 2
             ;;
 
-        --maxAgeAlert | -x )
+        --maxAgeAlert | -a )
             optMaxAgeAlert=$(( $2 * 60 ))
             shift 2
             ;;
 
-        --maxAgeIgnore | -X )
+        --maxAgeIgnore | -A )
             optMaxAgeIgnore=$(( $2 * 60 ))
+            shift 2
+            ;;
+
+        --minSizeAlert | -b )
+            optMinSizeAlert=$(( $2 * 1024 ))
+            shift 2
+            ;;
+
+        --minSizeIgnore | -B )
+            optMinSizeIgnore=$(( $2 * 1024 ))
+            shift 2
+            ;;
+
+        --maxSizeAlert | -k )
+            optMaxSizeAlert=$(( $2 * 1024 ))
+            shift 2
+            ;;
+
+        --maxSizeIgnore | -K )
+            optMaxSizeIgnore=$(( $2 * 1024 ))
             shift 2
             ;;
 
@@ -176,6 +219,11 @@ do
             shift;
             ;;
 
+        --mailEmptySubject | S )
+            optMailEmptySubject="$2"
+            shift 2
+            ;;
+        
         -- )
             shift;
             break
@@ -190,13 +238,17 @@ heading=""
 if [[ $optPlainText == "true" ]]
 then
     zeroByteFlag="0"
-    minAgeFlag="A"
-    maxAgeFlag="X"
+    minAgeFlag="N"
+    maxAgeFlag="A"
+    minSizeFlag="B"
+    maxSizeFlag="K"
     emptyFlag=" "
 else
-    zeroByteFlag="${COLOR_BG_BLUE}${COLOR_FG_WHITE}${STYLE_BOLD}0${STYLE_RESET}"
-    minAgeFlag="${COLOR_BG_RED}${COLOR_FG_WHITE}${STYLE_BOLD}A${STYLE_RESET}"
-    maxAgeFlag="${COLOR_BG_RED}${COLOR_FG_YELLOW}${STYLE_BOLD}X${STYLE_RESET}"
+    zeroByteFlag="${COLOR_BG_GREY}${COLOR_FG_BLACK}${STYLE_BOLD}0${STYLE_RESET}"
+    minAgeFlag="${COLOR_BG_RED}${COLOR_FG_WHITE}${STYLE_BOLD}N${STYLE_RESET}"
+    maxAgeFlag="${COLOR_BG_RED}${COLOR_FG_YELLOW}${STYLE_BOLD}A${STYLE_RESET}"
+    minSizeFlag="${COLOR_BG_BLUE}${COLOR_FG_WHITE}${STYLE_BOLD}B${STYLE_RESET}"
+    maxSizeFlag="${COLOR_BG_BLUE}${COLOR_FG_YELLOW}${STYLE_BOLD}K${STYLE_RESET}"
     emptyFlag=" "
 fi
 
@@ -205,50 +257,80 @@ then
     for i in {1..80}; do heading+="~"; done; heading+="\n"
     heading+="FILE LISTING FOR $optRootPath\n"
     heading+="$(date)\n"
-    if [[ $optShowOptions == "true" ]]
+
+    options=""
+    legend=""
+
+    if [[ $optFileRegex != "" ]]
     then
-        options=""
+        options+="- Only show files that match the regular expression: $optFileRegex\n"
+    fi
 
-        if [[ $optFileRegex != "" ]]
-        then
-            options+="- Only show files that match the regular expression: $optFileRegex\n"
-        fi
+    if [[ $optZeroByteAlert == "true" ]]
+    then
+        options+="- Flag empty ('zero byte') files\n"
+        legend+="$zeroByteFlag=Zero Byte    "
+    fi
 
-        if [[ $optZeroByteAlert == "true" ]]
-        then
-            options+="- Flag empty ('zero byte') files (flag: $zeroByteFlag)\n"
-        fi
+    if [[ $optMinAgeAlert != 0 ]]
+    then
+        options+="- Flag files that are less than $(( $optMinAgeAlert / 60 )) minutes old\n"
+        legend+="$minAgeFlag=Min Age    "
+    fi
 
-        if [[ $optMinAgeAlert != 0 ]]
-        then
-            options+="- Flag files that are at least $(( $optMinAgeAlert / 60 )) minutes old (flag: $minAgeFlag)\n"
-        fi
+    if [[ $optMaxAgeAlert != $currentTimeSSE ]]
+    then
+        options+="- Flag files that are older than $(( $optMaxAgeAlert / 60 )) minutes old\n"
+        legend+="$maxAgeFlag=Max Age    "
+    fi
 
-        if [[ $optMaxAgeAlert != $currentTimeSSE ]]
-        then
-            options+="- Flag files that are older than $(( $optMaxAgeAlert / 60 )) minutes old (flag: $maxAgeFlag)\n"
-        fi
+    if [[ $optMinAgeIgnore != 0 ]]
+    then
+        options+="- Do not list files that are less than $(( $optMinAgeIgnore / 60 )) minutes old\n"
+    fi
 
-        if [[ $optMinAgeIgnore != 0 ]]
-        then
-            options+="- Do not list files that are not at least $(( $optMinAgeIgnore / 60 )) minutes old\n"
-        fi
+    if [[ $optMaxAgeIgnore != $currentTimeSSE ]]
+    then
+        options+="- Do not list files that are older than $(( $optMaxAgeIgnore / 60 )) minutes old\n"
+    fi
 
-        if [[ $optMaxAgeIgnore != $currentTimeSSE ]]
-        then
-            options+="- Do not list files that are older than $(( $optMaxAgeIgnore / 60 )) minutes old\n"
-        fi
+    if [[ $optMinSizeAlert != 0 ]]
+    then
+        options+="- Flag files that are smaller than $(( $optMinSizeAlert / 1024 ))KB\n"
+        legend+="$minSizeFlag=Min Size    "
+    fi
 
-        if [[ $optSuppressHeading == "true" ]]
-        then
-            option+="- Suppress the report header block (How are you even seeing this?!)\n"
-        fi
+    if [[ $optMaxSizeAlert != 0 ]]
+    then
+        options+="- Flag files that are larger than $(( $optMaxSizeAlert / 1024 ))KB\n"
+        legend+="$maxSizeFlag=Max Size    "
+    fi
 
-        if [[ $options != "" ]]
-        then
-            heading+="\nOPTIONS:\n"
-            heading+="$options"
-        fi
+    if [[ $optMinSizeIgnore != 0 ]]
+    then
+        options+="- Do not list files that are not at least $(( $optMinSizeIgnore / 1024 ))KB\n"
+    fi
+
+    if [[ $optMaxSizeIgnore != 0 ]]
+    then
+        options+="- Do not list files that are larger than $(( $optMaxSizeIgnore / 1024 ))KB\n"
+    fi
+
+    if [[ $optSuppressHeading == "true" ]]
+    then
+        option+="- Suppress the report header block (How are you even seeing this?!)\n"
+    fi
+
+    if [[ $legend != "" ]]
+    then
+        heading+="\nLEGEND:\n"
+        heading+="$legend\n"
+    fi 
+
+    if [[ $optShowOptions == "true" && $options != "" ]]
+    then
+        heading+="\nOPTIONS:\n"
+        heading+="$options"
     fi
     for i in {1..80}; do heading+="~"; done; heading+="\n\n"
 fi
@@ -290,17 +372,21 @@ do
             then
                 fullPath="${currentDir}"/"${fileName}"
                 fileAge=$(( $currentTimeSSE - `stat --format=%Y "$fullPath"` ))
+                fileSize=$(echo `stat --format=%s "$fullPath"`)
 
-                if [[ $fileAge -gt $optMinAgeIgnore && $fileAge -lt $optMaxAgeIgnore ]]
+                if [[ $fileAge -gt $optMinAgeIgnore \
+                    && $fileAge -lt $optMaxAgeIgnore \
+                    && ($optMinSizeIgnore = 0 || $fileSize -gt $optMinSizeIgnore) \
+                    && ($optMaxSizeIgnore = 0 || $fileSize -lt $optMaxSizeIgnore) ]]
                 then
                     
                     flagStack=""
                     
                     # Has the user asked for a minimum age alert?
-                    if [ $optMinAgeAlert -gt 0 ]
+                    if [ $optMinAgeAlert != 0 ]
                     then
                         # Is the file's age greater than the minimum threshold?
-                        if [ $fileAge -gt $optMinAgeAlert ]
+                        if [ $fileAge -lt $optMinAgeAlert ]
                         then
                             flagStack+=$minAgeFlag
                         else
@@ -320,11 +406,33 @@ do
                         fi
                     fi
 
+                    # Has the user asked for a minimum size alert?
+                    if [ $optMinSizeAlert != 0 ]
+                    then
+                        # Is the file's age less than the minimum threshold?
+                        if [ $fileSize -lt $optMinSizeAlert ]
+                        then
+                            flagStack+=$minSizeFlag
+                        else
+                            flagStack+=$emptyFlag
+                        fi
+                    fi
+
+                    # Has the user asked for a maximum size alert?
+                    if [ $optMaxSizeAlert != 0 ]
+                    then
+                        # Is the file's age greater than the maximum threshold?
+                        if [ $fileSize -gt $optMaxSizeAlert ]
+                        then
+                            flagStack+=$maxSizeFlag
+                        else
+                            flagStack+=$emptyFlag
+                        fi
+                    fi
+
                     # Has the user asked for a zero byte alert?
                     if [[ $optZeroByteAlert == "true" ]]
                     then
-                        # Grabbing the file size (in bytes) now that we need it
-                        fileSize=$(echo `stat --format=%s "$fullPath"`)
                         if [ $fileSize == 0 ]
                         then
                             flagStack+=$zeroByteFlag
@@ -357,7 +465,13 @@ if [[ "$optMailDistribution" != "" ]]
 then
     if [[ $filesFound == "true" || $optMailSuppressEmpty != "true" ]]
     then
-        echo -e "$output" | mailx -s "$optMailSubject" -r "$optMailFrom" "$optMailDistribution"
+        subject="$optMailSubject"
+        if [[ $filesFound != "true" ]]
+        then
+            subject="$optMailEmptySubject"
+        fi
+        
+        echo -e "$output" | mailx -s "$subject" -r "$optMailFrom" "$optMailDistribution"
     fi
 else
     echo -e "$output"
