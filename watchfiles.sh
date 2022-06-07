@@ -5,7 +5,7 @@
 # A fancier "ls" with options to flag files based on certain criteria 
 # and send listings via email.
 
-SCRIPT_VERSION="22020517"
+SCRIPT_VERSION="22020526"
 
 shopt -s lastpipe
 shopt -s globstar
@@ -24,6 +24,7 @@ COLOR_BG_RED='\e[41m'
 COLOR_BG_BLUE='\e[44m'
 COLOR_BG_GREY='\e[47m'
 COLOR_BG_DGREY='\e[100m'
+OUTPUT_WIDTH=$(tput cols)
 
 ShowHelp() {
     echo "Usage: ./watchfiles.sh [OPTION] ..."
@@ -57,6 +58,7 @@ ShowHelp() {
     echo "                           result in any files being listed."
     echo "  -S, --mailEmptySubject   The subject line of the email if no files are listed."
     echo "  -v, --version            Show script version"
+    echo "  -T, --title              Adds a title line at the top of the output"
 }
 
 ShowVersion() {
@@ -68,16 +70,17 @@ ShowVersion() {
 flushOutput () {
     if [[ $optPlainText == "true" ]]
     then
-        dirLine="DIRECTORY - $currentDir\n"
-        for i in {1..80}; do dirLine+="-"; done; dirLine+="\n"
+        dirLine="\nDIRECTORY - $currentDir\n"
+        for i in $(seq $OUTPUT_WIDTH); do dirLine+="-"; done; dirLine+="\n"
     else
-        dirLine="${FORMAT_UNDERLINE}DIRECTORY - $currentDir${STYLE_RESET}\n"
+        dirLine="\n${FORMAT_UNDERLINE}DIRECTORY - $currentDir${STYLE_RESET}\n"
     fi
-    fileLines="$currentFiles\n"
+    fileLines="$currentFiles"
     output+="$dirLine"
     output+="$fileLines"
 }
 
+output=""
 currentDir=""
 currentFiles=""
 currentTimeSSE=$(echo `date +%s`) # Seconds Since Epoch
@@ -104,10 +107,11 @@ optMailFrom=""
 optMailDistribution=""
 optMailSuppressEmpty=""
 optMailEmptySubject=""
+optTitle=""
 
 # Read arguments and update options
-SHORT=h,t:,p:,n:,N:,a:,A:,0,H,O,P,s:,f:,d:,e,S:,b:,B:,k:,K:,v
-LONG=help,target:,fileRegex:,minAgeAlert:,minAgeIgnore:,maxAgeAlert:,maxAgeIgnore:,zeroByteAlert,suppressHeading,showOptions,plainText,mailSubject:,mailFrom:,mailDistribution:,mailSuppressEmpty,mailEmptySubject:,minSizeAlert:,minSizeIgnore:,maxSizeAlert:,maxSizeIgnore:,version
+SHORT=h,t:,p:,n:,N:,a:,A:,0,H,O,P,s:,f:,d:,e,S:,b:,B:,k:,K:,v,T:
+LONG=help,target:,fileRegex:,minAgeAlert:,minAgeIgnore:,maxAgeAlert:,maxAgeIgnore:,zeroByteAlert,suppressHeading,showOptions,plainText,mailSubject:,mailFrom:,mailDistribution:,mailSuppressEmpty,mailEmptySubject:,minSizeAlert:,minSizeIgnore:,maxSizeAlert:,maxSizeIgnore:,version,title:
 OPTS=$(getopt -n watchfiles --options $SHORT --longoptions $LONG -- "$@")
 
 eval set -- "$OPTS"
@@ -208,8 +212,9 @@ do
         --mailDistribution | d )
             optMailDistribution="$2"
 
-            # Force plain text output
+            # Force plain text output and divider width
             optPlainText="true"
+            OUTPUT_WIDTH=80
 
             shift 2
             ;;
@@ -224,6 +229,11 @@ do
             shift 2
             ;;
         
+        --title | T )
+            optTitle="$2"
+            shift 2
+            ;;
+        
         -- )
             shift;
             break
@@ -231,8 +241,6 @@ do
 
     esac
 done
-
-heading=""
 
 # Set values based on color output status
 if [[ $optPlainText == "true" ]]
@@ -252,9 +260,24 @@ else
     emptyFlag=" "
 fi
 
+# Add the custom title if one was provided
+if [ "$optTitle" != "" ]
+then
+    if [[ $optPlainText == "true" ]]
+    then
+        output+="$optTitle\n"
+    else
+        printf -v title "%*s" $(( (${#optTitle} + $OUTPUT_WIDTH) / 2)) "$optTitle"
+        printf -v title "%-*s" $OUTPUT_WIDTH "$title"
+        output+="${COLOR_BG_GREY}${COLOR_FG_BLACK}${STYLE_BOLD}$title${STYLE_RESET}\n"
+    fi
+fi
+
+heading=""
+
 if [[ $optSuppressHeading != "true" ]]
 then
-    for i in {1..80}; do heading+="~"; done; heading+="\n"
+    for i in $(seq $OUTPUT_WIDTH); do heading+="="; done; heading+="\n"
     heading+="FILE LISTING FOR $optRootPath\n"
     heading+="$(date)\n"
 
@@ -332,10 +355,10 @@ then
         heading+="\nOPTIONS:\n"
         heading+="$options"
     fi
-    for i in {1..80}; do heading+="~"; done; heading+="\n\n"
+    for i in $(seq $OUTPUT_WIDTH); do heading+="~"; done; heading+="\n"
 fi
 
-output="$heading"
+output+="$heading"
 
 # Executes "ls" and redirects output to the loop
 ls -hRltQ --time-style=long-iso --width=250 $optRootPath |
@@ -459,6 +482,11 @@ done
 if [[ "$currentDir" != "" && "$currentFiles" != "" ]]
 then
     flushOutput
+fi
+
+if [[ $filesFound != "true" ]]
+then
+    output+="\nNO FILES FOUND\n"
 fi
 
 if [[ "$optMailDistribution" != "" ]]
