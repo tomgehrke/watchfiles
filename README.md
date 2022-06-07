@@ -44,6 +44,7 @@ Mandatory arguments to long options are mandatory for short options too.
                            result in any files being listed.
   -S, --mailEmptySubject   The subject line of the email if no files are listed.
   -v, --version            Show script version
+  -T, --title              Adds a title line at the top of the output
 ```
 
 ## Use Cases
