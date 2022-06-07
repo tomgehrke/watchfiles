@@ -12,7 +12,7 @@ The problem I was originally trying to solve was that I needed to monitor severa
 
 Much can be gleaned about the usage possibilites by a review of the command line arguments.
 
-```bash
+```txt
 Usage: ./watchfiles.sh [OPTION] ...
 List files recursively (the current directory by default).
 
