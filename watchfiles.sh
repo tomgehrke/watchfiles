@@ -13,57 +13,62 @@ shopt -s globstar
 STYLE_RESET='\e[0m'
 FORMAT_BOLD='\e[1m'
 FORMAT_UNDERLINE='\e[4m'
-COLOR_FG_BLACK='\e[30m'     
+COLOR_FG_BLACK='\e[30m'
 COLOR_FG_RED='\e[31m'
 COLOR_FG_YELLOW='\e[33m'
 COLOR_FG_BLUE='\e[34m'
 COLOR_FG_GREY='\e[37m'
 COLOR_FG_WHITE='\e[97m'
-COLOR_BG_BLACK='\e[40m'     
+COLOR_BG_BLACK='\e[40m'
 COLOR_BG_RED='\e[41m'
 COLOR_BG_BLUE='\e[44m'
 COLOR_BG_GREY='\e[47m'
 COLOR_BG_DGREY='\e[100m'
 OUTPUT_WIDTH=$(tput cols)
 
-ShowHelp() {
-    echo "Usage: ./watchfiles.sh [OPTION] ..."
-    echo "List files recursively (the current directory by default)."
-    echo
-    echo "Mandatory arguments to long options are mandatory for short options too."
-    echo
-    echo "  -t, --target             Path to target directory if other than current."
-    echo "                           NOTE: If your target path has wildcards or spaces, you"
-    echo "                           will want to enclose the path in quotation marks."
-    echo "  -p, --fileRegex          The regex pattern for including a file in the listing."
-    echo "  -n, --minAgeAlert        Flag files that are at least this old (in minutes)."
-    echo "  -N, --minAgeIgnore       Exclude from the listing files that are newer (in minutes)."
-    echo "  -a, --maxAgeAlert        Flag files that are older than this (in minutes)."
-    echo "  -A, --maxAgeIgnore       Exclude from the listing files that are older (in minutes)."
-    echo "  -b, --minSizeAlert       Flag files that are smaller than this size (in kilobytes)."
-    echo "  -B, --minSizeIgnore      Exclude from the listing files that are smaller (in kilobytes)."
-    echo "  -k, --maxSizeAlert       Flag files that are larger than this size (in kilobytes)."
-    echo "  -K, --maxSizeIgnore      Exclude from the listing files that are larger (in kilobytes)."
-    echo "  -0, --zeroByteAlert      Flag files that are 0 bytes."
-    echo "  -H, --suppressHeading    Do not show the listing heading block"
-    echo "  -O, --showOptions        Show the command line options used as criteria for this"
-    echo "                           listing as part of the listing heading block"
-    echo "  -P, --plainText          Output contains no color or decoration escape codes."
-    echo "  -s, --mailSubject        The subject line for emailed output."
-    echo "                           ('Watchfiles Report' is the default.)"
-    echo "  -f, --mailFrom           The address an emailed report should be sent from."
-    echo "  -d, --mailDistribution   The distribution list of comma separated addresses the" 
-    echo "                           email should be sent to."
-    echo "  -e, --mailSuppressEmpty  An email will not be sent if the set criteria did not"
-    echo "                           result in any files being listed."
-    echo "  -S, --mailEmptySubject   The subject line of the email if no files are listed."
-    echo "  -v, --version            Show script version"
-    echo "  -T, --title              Adds a title line at the top of the output"
+showHelp() {
+more <<EOF
+Usage: ./watchfiles.sh [OPTION] ...
+
+List files recursively (the current directory by default).
+
+Mandatory arguments to long options are mandatory for short options too.
+
+-t, --target             Path to target directory if other than current.
+                         NOTE: If your target path has wildcards or spaces, you
+                         will want to enclose the path in quotation marks.
+-p, --fileRegex          The regex pattern for including a file in the listing.
+-n, --minAgeAlert        Flag files that are at least this old (in minutes).
+-N, --minAgeIgnore       Exclude from the listing files that are newer (in minutes).
+-a, --maxAgeAlert        Flag files that are older than this (in minutes).
+-A, --maxAgeIgnore       Exclude from the listing files that are older (in minutes).
+-b, --minSizeAlert       Flag files that are smaller than this size (in kilobytes).
+-B, --minSizeIgnore      Exclude from the listing files that are smaller (in kilobytes).
+-k, --maxSizeAlert       Flag files that are larger than this size (in kilobytes).
+-K, --maxSizeIgnore      Exclude from the listing files that are larger (in kilobytes).
+-0, --zeroByteAlert      Flag files that are 0 bytes.
+-H, --suppressHeading    Do not show the listing heading block
+-O, --showOptions        Show the command line options used as criteria for this
+                         listing as part of the listing heading block
+-P, --plainText          Output contains no color or decoration escape codes.
+-s, --mailSubject        The subject line for emailed output.
+                         ('Watchfiles Report' is the default.)
+-f, --mailFrom           The address an emailed report should be sent from.
+-d, --mailDistribution   The distribution list of comma separated addresses the 
+                         email should be sent to.
+-e, --mailSuppressEmpty  An email will not be sent if the set criteria did not
+                         result in any files being listed.
+-S, --mailEmptySubject   The subject line of the email if no files are listed.
+-v, --version            Show script version
+-T, --title              Adds a title line at the top of the output
+EOF
 }
 
-ShowVersion() {
-    echo "watchfiles.sh v$SCRIPT_VERSION"
-    echo "by Tom Gehrke"
+showVersion() {
+cat <<EOF
+watchfiles.sh v$SCRIPT_VERSION
+by Tom Gehrke
+EOF
 }
 
 # Flushed gathered lines to the output variable
@@ -120,12 +125,12 @@ while :
 do
     case "$1" in
         --help | -h )
-            ShowHelp
+            showHelp
             exit
             ;;
 
         --version | -v )
-            ShowVersion
+            showVersion
             exit
             ;;
 
